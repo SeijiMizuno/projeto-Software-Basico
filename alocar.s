@@ -108,13 +108,70 @@ endWhileImprime:
     syscall
     ret
 
+# ==========================================================================
+# alocaMem de teste ============================================================
+alocaMem:
+    movq topoHeap(%rip), %rax     # rax = topo atual do heap
+
+    movq %rdi, %rcx               # rcx = tamanho pedido (sem controle)
+    movq %rcx, %r9                # salva o tamanho para gravar depois
+
+    addq $16, %rcx                # rcx = tamanho total com controle
+    addq %rcx, %rax               # rax = novo topo desejado
+
+    movq %rax, %rdi               # rdi = novo endereço para o brk
+    movq $12, %rax                # syscall brk
+    syscall
+
+    # ponteiro inicial do bloco alocado
+    movq topoHeap(%rip), %rbx
+
+    # marca como OCUPADO
+    movq $1, (%rbx)
+
+    # salva o TAMANHO do bloco (sem os 16 bytes de controle)
+    movq %r9, 8(%rbx)
+
+    # atualiza topoHeap
+    movq %rax, topoHeap(%rip)
+
+    # retorna ponteiro de dados (16 bytes depois do controle)
+    addq $16, %rbx
+    movq %rbx, %rax
+
+    ret
+
+# ==========================================================================
+# desalocaMem =============================================================
+# Recebe um ponteiro de dados e marca o bloco como livre
+# Entrada: %rdi = ponteiro de dados (retornado por alocaMem)
+desalocaMem:
+    subq $16, %rdi         # volta 16 bytes para acessar o início do bloco (controle)
+    movq $0, (%rdi)        # marca como livre (0)
+    ret
 
 # ==========================================================================
 # Main =====================================================================
 .globl  main
 .type   main,@function
 main:
+    call iniciaAlocador
+    call imprimeMapa              # imprime estado inicial da heap (vazia)
 
+    movq $2, %rdi
+    call alocaMem
+    movq %rax, a
+    call imprimeMapa              # após alocar a
+
+    movq $3, %rdi
+    call alocaMem
+    movq %rax, b
+    call imprimeMapa              # após alocar b
+
+    # desaloca o ponteiro 'a'
+    movq a, %rdi
+    call desalocaMem
+    call imprimeMapa              # após desalocar a
 
     # exit(0)
     mov     $60, %rax
