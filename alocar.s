@@ -28,7 +28,7 @@
 iniciaAlocador:
     movq     $0, %rdi            # coloca 0 em rdi
     movq     $12, %rax           # numero do syscall = 12 em rax
-    syscall                     # salta para o kernel, que retorna em rax o endereço atual do "break" do heap
+    syscall                      # salta para o kernel, que retorna em rax o endereço atual do "break" do heap
     movq     %rax, INICIO_HEAP(%rip)  # inicio da lista
     movq     %rax, TOPO_HEAP(%rip)    # fim atual do heap
     ret                         # preserva rax e limpa o frame
@@ -204,7 +204,6 @@ alocaMem:
     movq %r12, -8(%rbx)
 
     # retorna ponteiro de dados (16 bytes depois do node_manager)
-    # addq $16, %rbx
     movq %rbx, %rax
     jmp .fimAlocaMem
 
@@ -224,9 +223,8 @@ desalocaMem:
 
 # ==========================================================================
 # Main =====================================================================
-.globl  main
-.type   main,@function
-main:
+.globl  _start
+_start:
     call iniciaAlocador
     call imprimeMapa              # imprime estado inicial da heap (vazia)
     # Saída esperada:
