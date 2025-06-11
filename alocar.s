@@ -157,6 +157,12 @@ procuraLivre:
     # Atualiza TOPO_HEAP
     movq %rax, TOPO_HEAP(%rip)
 
+    # Define esse novo nó como livre
+    movq $1, (%r10)
+
+    # Define o tamanho desse novo nó criado com o tamanho solicitado
+    movq %r9, 8(%r10)
+
     # coloca o endereço do novo bloco em %rax para retorno da procedure
     addq $16, %r10          # %r10 ainda contém o valor antigo do topo da heap
     movq %r10, %rax     
@@ -175,35 +181,44 @@ alocaMem:
     pushq %rbp
     movq %rsp, %rbp
 
+    # checa se tam solicitado é 0
     movq 16(%rbp), %rax
     cmpq $0, %rax
     je .erroTamanhoZero     # se tam = 0, vai para o tratamento do erro
 
+    # se chegou aqui, tamanho é diferente de 0
+    # procura blocos livres adequados
     pushq %rax               # empilha param. tamanho_solicitado
     call procuraLivre
-    addq $8, %rsp               # desempilha param. tamanho_solicitado
+    addq $8, %rsp               # desempilha param. da pilha
 
-# TO DO =======================
-# Processo agora é:
-    # 1. checar se o tamanho solicitado vai deixar uma "sobra" de espaço livre
-        # 1.1 se sim, checar se o espaço livre possui no mínimo 17 bytes [8][8][1]
-            # 1.1.1 se sim, separa o nó em dois, a primeira parte será ocupada pelo tamanho solicitado
-            # 1.1.2 se não, não faz nada e só ocupa todo o nó mesmo (não terá "sobra" suficiente para alocar um novo nó)
-        # 1.2 se não, o tamanho é perfeito (tamanho solicitado == tamanho livre), alocação normal.  
-# TO DO =======================
-
-    # ponteiro inicial do nó alocado
+    # ponteiro ao payload do bloco livre
     movq %rax, %rbx
+    # Definindo nó como ocupado
+    movq $1, -16(%rbx)      # flag = 1
 
-    # marca como OCUPADO
-    movq $1, -16(%rbx)
 
-    # salva o TAMANHO do nó (sem os 16 bytes de node_manager)
-    movq 16(%rbp), %r12
-    movq %r12, -8(%rbx)
+    movq -8(%rbx), %r14     # tamanho bloco livre
+    movq 16(%rbp), %r12     # tamanho solicitado 
 
-    # retorna ponteiro de dados (16 bytes depois do node_manager)
-    movq %rbx, %rax
+    # calcula sobra apos alocar
+    movq %r14, %r15     # r15 = size do bloco livre
+    subq %r12, %r15     # sobra = size livre - solicitado
+
+    ########## Logica Split ###########
+    # se sobra >= 17 faz Split
+    cmpq $17, %r15
+    jl .fimAlocaMem # não há espaço para split do bloco livre, então não há alteração no tamanho do bloco
+    # se chegou aqui, precisa fazer split
+    
+    movq %r12, -8(%rbx)     # tamanho solicitado
+    # split
+    addq %r12, %rbx         # rbx já está no endereço da flag de ocupado do novo nó resultante do split
+    movq $0, (%rbx)         # define nó como livre (flag 0)
+    subq $16, %r15          # calcula novo tamanho do nó resultante do split: novo_tam = sobra - 16
+    movq %r15, 8(%rbx)      # define o tamanho do nó resultante do split
+
+    ##### finalizar a alocação
     jmp .fimAlocaMem
 
 # se tentar alocar 0 bytes retorna ponteiro NULL, igual em c
@@ -234,16 +249,8 @@ _start:
     # Saída esperada:
     # Imagem da heap: 
 
-    # aloca tamanho 0
-    movq $0, TAMANHO 
-    pushq TAMANHO
-    call alocaMem
-    addq $8, %rsp        # limpa pilha
-    cmpq $0, %rax       # compara retorno com zero
-    jne erroMemoria     # se for diferente teve erro
-
-    # Aloca 8 e armazena em 'A'
-    movq $8, TAMANHO
+    # Aloca 30 e armazena em 'A'
+    movq $30, TAMANHO
     pushq TAMANHO
     call alocaMem
     addq $8, %rsp
@@ -253,17 +260,6 @@ _start:
     # Saída esperada:
     # Imagem da heap: ################++++++++
 
-    # Aloca 3 e armazena em 'B'
-    movq $3, TAMANHO
-    pushq TAMANHO
-    call alocaMem
-    addq $8, %rsp
-
-    movq %rax, B
-    call imprimeMapa              # após alocar B
-    # Saída esperada:
-    # Imagem da heap: ################++++++++################+++
-
     # desaloca o ponteiro 'A'
     movq A, %rdi
     call desalocaMem
@@ -271,33 +267,8 @@ _start:
     # Saída esperada:
     # Imagem da heap: ################--------################+++
 
-    # Aloca 10 e armazena em 'C'
-    movq $10, TAMANHO
-    pushq TAMANHO
-    call alocaMem
-    addq $8, %rsp
-
-    movq %rax, C
-    call imprimeMapa              # após alocar C
-    # Saída esperada:
-    # Imagem da heap: ################--------################+++################++++++++++
-
-    # desaloca o ponteiro 'B'
-    movq B, %rdi
-    call desalocaMem
-    call imprimeMapa              # após desalocar B
-    # Saída esperada:
-    # Imagem da heap: ################--------################---################++++++++++
-
-    # desaloca o ponteiro 'C'
-    movq C, %rdi
-    call desalocaMem
-    call imprimeMapa              # após desalocar C
-    # Saída esperada:
-    # Imagem da heap: ################--------################---################----------
-
     # Aloca 8 e armazena em 'A'
-    movq $8, TAMANHO
+    movq $13, TAMANHO
     pushq TAMANHO
     call alocaMem
     addq $8, %rsp
@@ -305,29 +276,7 @@ _start:
     movq %rax, A
     call imprimeMapa              # após alocar A
     # Saída esperada:
-    # Imagem da heap: ################++++++++################---################----------
-
-    # Aloca 10 e armazena em 'C'
-    movq $10, TAMANHO
-    pushq TAMANHO
-    call alocaMem
-    addq $8, %rsp
-
-    movq %rax, C
-    call imprimeMapa              # após alocar C
-    # Saída esperada:
-    # Imagem da heap: ################++++++++################---################++++++++++
-
-    # Aloca 3 e armazena em 'B'
-    movq $3, TAMANHO
-    pushq TAMANHO
-    call alocaMem
-    addq $8, %rsp
-
-    movq %rax, B
-    call imprimeMapa              # após alocar B
-    # Saída esperada:
-    # Imagem da heap: ################++++++++################+++################++++++++++
+    # Imagem da heap: ################++++++++
 
     # exit(0)
     movq $0, %rdi
