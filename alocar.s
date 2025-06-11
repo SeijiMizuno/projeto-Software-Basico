@@ -175,11 +175,10 @@ alocaMem:
     pushq %rbp
     movq %rsp, %rbp
 
-# TO DO =======================
-# Proteger de tentativa de alocação de tamanho ZERO, abortar ou só devolver a pilha como está
-# TO DO =======================
-
     movq 16(%rbp), %rax
+    cmpq $0, %rax
+    je .erroTamanhoZero     # se tam = 0, vai para o tratamento do erro
+
     pushq %rax               # empilha param. tamanho_solicitado
     call procuraLivre
     addq $8, %rsp               # desempilha param. tamanho_solicitado
@@ -207,6 +206,11 @@ alocaMem:
     movq %rbx, %rax
     jmp .fimAlocaMem
 
+# se tentar alocar 0 bytes retorna ponteiro NULL, igual em c
+.erroTamanhoZero:
+    movq $0, %rax
+    jmp .fimAlocaMem
+
 # fim do procedimento
 .fimAlocaMem:
     popq %rbp
@@ -229,6 +233,14 @@ _start:
     call imprimeMapa              # imprime estado inicial da heap (vazia)
     # Saída esperada:
     # Imagem da heap: 
+
+    # aloca tamanho 0
+    movq $0, TAMANHO 
+    pushq TAMANHO
+    call alocaMem
+    addq $8, %rsp        # limpa pilha
+    cmpq $0, %rax       # compara retorno com zero
+    jne erroMemoria     # se for diferente teve erro
 
     # Aloca 8 e armazena em 'A'
     movq $8, TAMANHO
