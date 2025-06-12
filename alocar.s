@@ -234,10 +234,42 @@ alocaMem:
 # ==========================================================================
 # desalocaMem =============================================================
 # Recebe um ponteiro de dados e marca o nó como livre
-# Entrada: %rdi = ponteiro de dados (retornado por alocaMem)
+# Entrada: 16(%rbp) = ponteiro de dados do nó a ser desalocado
 desalocaMem:
-    subq $16, %rdi         # volta 16 bytes para acessar o início do nó (node_manager)
-    movq $0, (%rdi)        # marca como livre (0)
+    pushq %rbp
+    movq %rsp, %rbp
+
+    movq TOPO_HEAP(%rip), %r10
+    movq 16(%rbp), %r8  # armazena o endereço do ponteiro a ser desalocado
+    movq $0, -16(%r8)   # define o nó como livre
+
+    movq -8(%r8), %r9   # armazena em r9 o tamanho do nó a ser desalocado
+
+    # checa se o próximo endereço também é livre para fusão
+    movq %r8, %rax
+    addq %r9, %rax      # rax agora possui o primeiro endereço do próximo nó
+    addq $16, %rax      # agora rax possui o primeiro endereço do bloco de dados do próximo nó
+
+    cmpq %r10, %rax
+    jge .fimDesalocaMem # checa se o próximo nó, na verdade é o topo da Heap
+    # se chegou aqui, esse não é o último nó da heap
+
+    cmpq $0, -16(%rax)     # checa se o próximo nó é livre
+    je .fusaoLivres
+    # se chegou aqui, então o próximo nó está ocupado, então não há fusão
+
+    jmp .fimDesalocaMem
+
+.fusaoLivres:
+    # r9 possui o tamanho do nó atual
+    movq -8(%r8), %r9       # soma o tamanho do próximo nó ao tamanho do nó atual (armazenado em r9) 
+    addq -8(%rax), %r9       # soma o tamanho do próximo nó ao tamanho do nó atual (armazenado em r9) 
+    addq $16, %r9           # soma 16 bytes (tamanho do gerenciamento) à soma dos tamanhos dos nós livres (armazenado em r9)
+
+    movq %r9, -8(%r8)      # armazena a soma dos tamanhos no espaço de tamanho do nó atual
+
+.fimDesalocaMem:
+    popq %rbp
     ret
 
 # ==========================================================================
@@ -260,23 +292,34 @@ _start:
     # Saída esperada:
     # Imagem da heap: ################++++++++
 
-    # desaloca o ponteiro 'A'
-    movq A, %rdi
-    call desalocaMem
-    call imprimeMapa              # após desalocar A
-    # Saída esperada:
-    # Imagem da heap: ################--------################+++
-
-    # Aloca 8 e armazena em 'A'
-    movq $13, TAMANHO
+    # Aloca 30 e armazena em 'B'
+    movq $10, TAMANHO
     pushq TAMANHO
     call alocaMem
     addq $8, %rsp
 
-    movq %rax, A
+    movq %rax, B
     call imprimeMapa              # após alocar A
     # Saída esperada:
     # Imagem da heap: ################++++++++
+
+    # desaloca o ponteiro 'A'
+    pushq B
+    call desalocaMem
+    addq $8, %rsp
+
+    call imprimeMapa              # após desalocar A
+    # Saída esperada:
+    # Imagem da heap: ################--------################+++
+
+    # desaloca o ponteiro 'A'
+    pushq A
+    call desalocaMem
+    addq $8, %rsp
+
+    call imprimeMapa              # após desalocar A
+    # Saída esperada:
+    # Imagem da heap: ################--------################+++
 
     # exit(0)
     movq $0, %rdi
