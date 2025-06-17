@@ -3,7 +3,7 @@
 
 int main (long int argc, char** argv) {
   void *a, *b;
-
+  printf("inicio\n");
   iniciaAlocador();               // Impressão esperada
   imprimeMapa();                  // <vazio>
 
@@ -11,9 +11,9 @@ int main (long int argc, char** argv) {
   imprimeMapa();                  // ################**********
   b = (void *) alocaMem(4);
   imprimeMapa();                  // ################**********##############****
-  liberaMem(a);
-  imprimeMapa();                  // ################----------##############****
-  liberaMem(b);                   // ################----------------------------
+  // liberaMem(a);
+  // imprimeMapa();                  // ################----------##############****
+  // liberaMem(b);                   // ################----------------------------
                                   // ou
                                   // <vazio>
   finalizaAlocador();

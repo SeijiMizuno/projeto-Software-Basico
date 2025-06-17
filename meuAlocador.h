@@ -17,4 +17,4 @@ void imprimeMapa();       // imprime um mapa da memória da região da heap.
                           // com o caractere "#". O caractere usado para
                           // a impressão dos bytes do bloco de cada nó depende
                           // se o bloco estiver livre ou ocupado. Se estiver livre, imprime o
-                          // caractere -". Se estiver ocupado, imprime o caractere "+".
+                          // caractere "-". Se estiver ocupado, imprime o caractere "+".
