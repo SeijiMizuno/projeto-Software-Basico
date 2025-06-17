@@ -127,9 +127,9 @@ procuraLivre:
 .whileProcura:
     # checa se a lista de livres é vazia
     cmpq $0, %rbx
-    je .expandeHeap
+    je .expandeHeapProcura
     cmpq %r10, %rbx
-    jge .expandeHeap
+    jge .expandeHeapProcura
 
     # se chegou aqui é porque há um INICIO_LIVRES e ainda estamos localizados antes de %brk
     movq -24(%rbx), %rcx    # armazena o tamanho do nó atual
@@ -149,7 +149,7 @@ procuraLivre:
     jmp .whileProcura
 
 # "joga" %rbk mais para frente
-.expandeHeap:
+.expandeHeapProcura:
     movq 16(%rbp), %r11               # 16(%rbp) = tamanho pedido (sem node_manager)
 
     addq $32, %r11                # tamanho total com node_manager (tamanho solicitado + 32 bytes)
@@ -315,41 +315,73 @@ alocaMem:
 # =========================================================================
 # liberaMem =============================================================
 # Recebe um ponteiro de dados e marca o nó como livre
-# Entrada: 16(%rbp) = ponteiro de dados do nó a ser desalocado
+# Entrada: %rdi = ponteiro de dados do nó a ser desalocado
 liberaMem:
     pushq %rbp
     movq %rsp, %rbp
 
-    movq TOPO_HEAP(%rip), %r10
-    movq 16(%rbp), %r8  # armazena o endereço do ponteiro a ser desalocado
-    movq $0, -16(%r8)   # define o nó como livre
+    movq %rdi, %r8  # armazena o endereço do ponteiro a ser desalocado
+    movq $0, -32(%r8)   # define o nó como livre
 
-    movq -8(%r8), %r9   # armazena em r9 o tamanho do nó a ser desalocado
+    movq -24(%r8), %rbx   # armazena em r9 o tamanho do nó a ser desalocado
 
-    # checa se o próximo endereço também é livre para fusão
-    movq %r8, %rax
-    addq %r9, %rax      # rax agora possui o primeiro endereço do próximo nó
-    addq $16, %rax      # agora rax possui o primeiro endereço do bloco de dados do próximo nó
+    # retira nó ocupado da lista de ocupado
+    cmpq $0, -16(%r8)
+    je .primeiroLista
+    
+    cmpq $0, -8(%r8)
+    je .ultimoLista
 
-    cmpq %r10, %rax
-    jge .fimDesalocaMem # checa se o próximo nó, na verdade é o topo da Heap
-    # se chegou aqui, esse não é o último nó da heap
+    jmp .meioLista
 
-    cmpq $0, -16(%rax)     # checa se o próximo nó é livre
-    je .fusaoLivres
-    # se chegou aqui, então o próximo nó está ocupado, então não há fusão
+.primeiroLista:
+    cmpq $0, -8(%r8)
+    je .unicoLista
+    movq -8(%r8), %r9
+    movq $0, -16(%r9)
+    movq $0, -8(%r8)
+    movq %r9, INICIO_OCUPADOS(%rip)
+    jmp .adicionaListaLivre
 
-    jmp .fimDesalocaMem
+.ultimoLista:
+    movq -16(%r8), %r9
+    movq $0, -8(%r9)
+    movq $0, -16(%r8)
+    jmp .adicionaListaLivre
 
-.fusaoLivres:
-    # r9 possui o tamanho do nó atual
-    movq -8(%r8), %r9       # soma o tamanho do próximo nó ao tamanho do nó atual (armazenado em r9) 
-    addq -8(%rax), %r9       # soma o tamanho do próximo nó ao tamanho do nó atual (armazenado em r9) 
-    addq $16, %r9           # soma 16 bytes (tamanho do gerenciamento) à soma dos tamanhos dos nós livres (armazenado em r9)
+.meioLista:
+    movq -16(%r8), %r9
+    movq -8(%r8), %r10
+    movq %r9, -16(%r10)
+    movq %r10, -8(%r9)
+    movq $0, -16(%r8)
+    movq $0, -8(%r8)
+    jmp .adicionaListaLivre
 
-    movq %r9, -8(%r8)      # armazena a soma dos tamanhos no espaço de tamanho do nó atual
+.unicoLista:
+    movq $0, INICIO_OCUPADOS(%rip)
 
-.fimDesalocaMem:
+.adicionaListaLivre:
+    cmpq $0, INICIO_LIVRES(%rip)
+    je .adicionaPrimeiroLivre
+    movq INICIO_LIVRES(%rip), %r11
+.whilePercorreListaLivre:
+    cmpq $0, -8(%r11)
+    jne .nextNodoLivre
+    # se chegou aqui, %r11 é o último nó da lista livre
+    # Remanejar ponteiros
+    movq %r11, -16(%r8)
+    movq %r8, -8(%r11)
+    jmp .fimLiberaMem
+
+.nextNodoLivre:
+    movq -8(%r11), %r11
+    jmp .whilePercorreListaLivre
+
+.adicionaPrimeiroLivre:
+    movq %r8, INICIO_LIVRES(%rip)
+    jmp .fimLiberaMem
+
+.fimLiberaMem:
     popq %rbp
     ret
-    
